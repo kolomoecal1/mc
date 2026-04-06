@@ -1,103 +1,109 @@
-#include <stdio.h>
-#include <string.h>
-#include "pico/stdlib.h"
 #include "stdio-task/stdio-task.h"
 #include "protocol-task/protocol-task.h"
+#include "pico/stdlib.h"
+#include "stdio.h"
+#include "stdlib.h"
 #include "led-task/led-task.h"
 
 #define DEVICE_NAME "my-pico-device"
 #define DEVICE_VRSN "v0.0.1"
 
-// Колбэк для включения светодиода
-void led_on_callback(const char* args)
+void version_callback(const char* args)
 {
+	printf("device name: '%s', firmware version: %s\n", DEVICE_NAME, DEVICE_VRSN);
+}
+
+void led_on_callback(const char* args) {
     led_task_state_set(LED_STATE_ON);
-    printf("led enable done\n");
+    printf("LED turned ON\n");
 }
 
-// Колбэк для выключения светодиода
-void led_off_callback(const char* args)
-{
+void led_off_callback(const char* args) {
     led_task_state_set(LED_STATE_OFF);
-    printf("led disable done\n");
+    printf("LED turned OFF\n");
 }
 
-// Колбэк для мигания светодиода
-void led_blink_callback(const char* args)
-{
+void led_blink_callback(const char* args) {
     led_task_state_set(LED_STATE_BLINK);
-    printf("led blink mode enabled\n");
+    printf("LED blinking started\n");
 }
 
-// КОЛБЭК ДЛЯ КОМАНДЫ PERIOD - УСТАНОВКА ПЕРИОДА МИГАНИЯ
-void led_blink_set_period_ms_callback(const char* args)
-{
+void led_blink_set_period_ms_callback(const char* args) {
     uint period_ms = 0;
-    
-    // Парсим аргумент (ожидаем число)
     sscanf(args, "%u", &period_ms);
     
-    // Проверка на нулевое значение
-    if (period_ms == 0)
-    {
-        printf("Error: period must be > 0 ms\n");
+    if (period_ms == 0) {
+        printf("Error: period cannot be zero\n");
         return;
     }
     
-    // Устанавливаем новый период
     led_task_set_blink_period_ms(period_ms);
     printf("LED blink period set to %u ms\n", period_ms);
 }
 
-// Колбэк для версии
-void version_callback(const char* args)
-{
-    printf("device name: '%s', firmware version: %s\n", DEVICE_NAME, DEVICE_VRSN);
+void help_callback(const char* args);
+
+void mem_callback(const char* args) {
+    uint32_t addr = 0;
+    
+    if (sscanf(args, "%x", &addr) != 1) {
+        printf("Error: invalid address format. Usage: mem <addr>\n");
+        return;
+    }
+    
+    volatile uint32_t* ptr = (volatile uint32_t*)addr;
+    uint32_t value = *ptr;
+    
+    printf("Memory at 0x%08X: 0x%08X (dec: %u)\n", addr, value, value);
 }
 
-// МАССИВ КОМАНД - ЗДЕСЬ ДОЛЖНА БЫТЬ КОМАНДА period!
-api_t device_api[] =
-{
+void wmem_callback(const char* args) {
+    uint32_t addr = 0;
+    uint32_t value = 0;
+    
+    if (sscanf(args, "%x %x", &addr, &value) != 2) {
+        printf("Error: invalid arguments. Usage: wmem <addr> <value>\n");
+        return;
+    }
+    
+    volatile uint32_t* ptr = (volatile uint32_t*)addr;
+    *ptr = value;
+    
+    printf("Written 0x%08X to address 0x%08X\n", value, addr);
+}
+
+api_t device_api[] = {
+    {"help", help_callback, "show this help message"},
     {"version", version_callback, "get device name and firmware version"},
     {"on", led_on_callback, "turn LED on"},
     {"off", led_off_callback, "turn LED off"},
     {"blink", led_blink_callback, "make LED blink"},
-    {"period", led_blink_set_period_ms_callback, "set blink period in ms (e.g., 'period 200')"},  // <--- ЭТА СТРОКА
+    {"led_blink_set_period_ms", led_blink_set_period_ms_callback, "set blink period in milliseconds"},
+    {"mem", mem_callback, "read memory word at address (mem <addr>)"},
+    {"wmem", wmem_callback, "write memory word at address (wmem <addr> <value>)"},
     {NULL, NULL, NULL},
 };
 
-int main() {
-    stdio_init_all();
+void help_callback(const char* args) {
+    printf("\nAvailable commands:\n");
     
-    led_task_init();
-    stdio_task_init();
-    protocol_task_init(device_api);
-    
-    sleep_ms(2000);
-    
-    printf("\n========================================\n");
-    printf("    02-control: LED Control with Period  \n");
-    printf("========================================\n");
-    printf("Commands:\n");
-    printf("  version           - get device info\n");
-    printf("  on                - turn LED on\n");
-    printf("  off               - turn LED off\n");
-    printf("  blink             - make LED blink\n");
-    printf("  period <ms>       - set blink period (e.g., 'period 200')\n");
-    printf("\nType command and press ENTER:\n");
-    printf("----------------------------------------\n\n");
-    printf("> ");
-    
-    while (1) {
-        char* command = stdio_task_handle();
-        
-        if (command != NULL) {
-            protocol_task_handle(command);
-            printf("\n> ");
-        }
-        
-        led_task_handler();
+    for (int i = 0; device_api[i].command_name != NULL; i++) {
+        printf("  %-20s - %s\n", device_api[i].command_name, device_api[i].command_help);
     }
-    
-    return 0;
+    printf("\n");
+}
+
+
+int main()
+{
+    stdio_init_all();
+    stdio_task_init();
+    led_task_init();
+    protocol_task_init(device_api);
+
+    while (true) {
+        char* command_string = stdio_task_handle();
+        protocol_task_handle(command_string);
+        led_task_handle();
+    }
 }

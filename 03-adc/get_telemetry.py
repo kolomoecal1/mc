@@ -13,7 +13,7 @@ def read_value(ser):
             continue
 
 def main():
-    ser = serial.Serial(port='COM3', baudrate=115200, timeout=0.0)
+    ser = serial.Serial(port='COM6', baudrate=115200, timeout=0.0)
     
     if ser.is_open:
         print(f"Port {ser.name} opened")
@@ -39,8 +39,6 @@ def main():
             measures_ts.append(ts)
             measures_voltage_V.append(voltage_V)
             measures_temperature_C.append(temp_C)
-            
-            print(f'{voltage_V:.3f} V - {temp_C:.1f}C - {ts:.2f}s')
             
             time.sleep(0.1)
             

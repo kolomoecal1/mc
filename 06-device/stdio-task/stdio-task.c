@@ -23,6 +23,16 @@ char* stdio_task_handle()
 
 	putchar(symbol);
 
+    if (symbol == '\b' || symbol == 0x7F || symbol == 127)
+    {
+        if (command_buf_idx > 0)
+        {
+            command_buf_idx--;
+			command[command_buf_idx] = '\0';
+        }
+        return NULL;
+    }
+
 	if (symbol == '\r' || symbol == '\n')
 	{
 		command[command_buf_idx] = '\0';
